@@ -103,6 +103,11 @@ This is the only way control passes into the cgame module.
 This must be the very first function compiled into the .q3vm file
 ================
 */
+#ifdef USE_STATIC_MODULES
+// When statically linked into the engine, the engine's built-in UI already
+// exports a vmMain; export the cgame entry point under an unambiguous name.
+#define vmMain cgame_vmMain
+#endif
 extern "C" Q_EXPORT intptr_t vmMain( int command, intptr_t arg0, intptr_t arg1, intptr_t arg2, intptr_t arg3, intptr_t arg4, intptr_t arg5, intptr_t arg6, intptr_t arg7 ) {
 	centity_t		*cent;
 

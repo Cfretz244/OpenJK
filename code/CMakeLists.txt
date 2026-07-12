@@ -449,7 +449,61 @@ if(BuildSPEngine OR BuildJK2SPEngine)
 	endif(BuildSPEngine)
 	if(BuildJK2SPEngine)
 		set(SPEngineDefines ${SPEngineDefines} "JK2_MODE")
+		if(BuildJK2SPStatic)
+			set(SPEngineDefines ${SPEngineDefines} "USE_STATIC_MODULES")
+		endif()
 		add_sp_project(${JK2SPEngine} "JK2 SP Client" ${JK2SPDir} ${JK2InstallDir} ${JK2SPClientComponent})
+
+		if(BuildJK2SPStatic)
+			# The game and renderer modules are built as static archives, but
+			# each compiles its own copies of shared sources (q_shared etc.)
+			# with different defines, so they cannot be linked in directly:
+			# the linker would resolve their internal references against the
+			# engine's divergent copies. Instead each archive is prelinked
+			# into a single relocatable object (binding internal references
+			# internally) with every symbol except its entry points made
+			# private extern, then linked into the engine.
+			if(CMAKE_OSX_ARCHITECTURES)
+				set(JK2SPPrelinkArch -arch ${CMAKE_OSX_ARCHITECTURES})
+			else()
+				set(JK2SPPrelinkArch "")
+			endif()
+			if(CMAKE_OSX_DEPLOYMENT_TARGET)
+				set(JK2SPPrelinkPlatform -platform_version macos ${CMAKE_OSX_DEPLOYMENT_TARGET} ${CMAKE_OSX_DEPLOYMENT_TARGET})
+			else()
+				set(JK2SPPrelinkPlatform "")
+			endif()
+
+			set(JK2SPGamePrelinked "${CMAKE_CURRENT_BINARY_DIR}/${JK2SPGame}_prelinked.o")
+			add_custom_command(OUTPUT ${JK2SPGamePrelinked}
+				COMMAND ld -r ${JK2SPPrelinkArch} ${JK2SPPrelinkPlatform}
+					-force_load "$<TARGET_FILE:${JK2SPGame}>"
+					-exported_symbol _GetGameAPI
+					-exported_symbol _dllEntry
+					-exported_symbol _cgame_vmMain
+					-o "${JK2SPGamePrelinked}"
+				DEPENDS ${JK2SPGame}
+				COMMENT "Prelinking ${JK2SPGame} (localizing internal symbols)")
+
+			set(JK2SPRendererPrelinked "${CMAKE_CURRENT_BINARY_DIR}/${JK2SPVanillaRenderer}_prelinked.o")
+			add_custom_command(OUTPUT ${JK2SPRendererPrelinked}
+				COMMAND ld -r ${JK2SPPrelinkArch} ${JK2SPPrelinkPlatform}
+					-force_load "$<TARGET_FILE:${JK2SPVanillaRenderer}>"
+					-exported_symbol _GetRefAPI
+					-o "${JK2SPRendererPrelinked}"
+				DEPENDS ${JK2SPVanillaRenderer}
+				COMMENT "Prelinking ${JK2SPVanillaRenderer} (localizing internal symbols)")
+
+			add_custom_target(jk2sp_prelink DEPENDS ${JK2SPGamePrelinked} ${JK2SPRendererPrelinked})
+			add_dependencies(${JK2SPEngine} jk2sp_prelink)
+			# The renderer's image loaders need jpeg/png, which the engine
+			# does not otherwise link (zlib/minizip it already does).
+			target_link_libraries(${JK2SPEngine}
+				${JK2SPGamePrelinked}
+				${JK2SPRendererPrelinked}
+				${JPEG_LIBRARIES}
+				${PNG_LIBRARIES})
+		endif(BuildJK2SPStatic)
 	endif(BuildJK2SPEngine)
 
 endif(BuildSPEngine OR BuildJK2SPEngine)

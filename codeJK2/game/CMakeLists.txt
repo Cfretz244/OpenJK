@@ -284,13 +284,21 @@ if(WIN32)
 	set(JK2SPGameFiles ${JK2SPGameFiles} ${JK2SPGameWin32Files})
 endif(WIN32)
 
-add_library(${JK2SPGame} SHARED ${JK2SPGameFiles})
+if(BuildJK2SPStatic)
+	# Built as a static archive and prelinked into the engine executable;
+	# the archive itself is not installed.
+	add_library(${JK2SPGame} STATIC ${JK2SPGameFiles})
+	set(JK2SPGameDefines ${JK2SPGameDefines} "USE_STATIC_MODULES")
+else()
+	add_library(${JK2SPGame} SHARED ${JK2SPGameFiles})
+endif()
 
 if(NOT MSVC)
 	# remove "lib" prefix for .so/.dylib files
 	set_target_properties(${JK2SPGame} PROPERTIES PREFIX "")
 endif()
 
+if(NOT BuildJK2SPStatic)
 if(WIN32)
 	install(TARGETS ${JK2SPGame} RUNTIME DESTINATION "${JK2InstallDir}/OpenJK")
 else(WIN32)
@@ -300,6 +308,7 @@ else(WIN32)
 		install(TARGETS ${JK2SPGame} LIBRARY DESTINATION "${JK2InstallDir}/OpenJK")
 	endif(MakeApplicationBundles AND BuildJK2SPEngine)
 endif(WIN32)
+endif(NOT BuildJK2SPStatic)
 
 set_target_properties(${JK2SPGame} PROPERTIES COMPILE_DEFINITIONS "${JK2SPGameDefines}")
 

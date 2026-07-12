@@ -156,12 +156,19 @@ if(BuildSPRdVanilla OR BuildJK2SPRdVanilla)
 	set(SPRDVanillaRendererIncludeDirectories ${SPRDVanillaRendererIncludeDirectories} ${OpenJKLibDir})
 
 	function(add_sp_renderer_project ProjectName Label EngineName InstallDir Component)
-		add_library(${ProjectName} SHARED ${SPRDVanillaFiles})
+		if(SPRDVanillaStatic)
+			# Built as a static archive and prelinked into the engine
+			# executable; the archive itself is not installed.
+			add_library(${ProjectName} STATIC ${SPRDVanillaFiles})
+		else()
+			add_library(${ProjectName} SHARED ${SPRDVanillaFiles})
+		endif()
 		if(NOT MSVC)
 			# remove "lib" prefix for .so/.dylib files
 			set_target_properties(${ProjectName} PROPERTIES PREFIX "")
 		endif()
 
+		if(NOT SPRDVanillaStatic)
 		if(WIN32)
 			install(TARGETS ${ProjectName}
 				RUNTIME
@@ -180,6 +187,7 @@ if(BuildSPRdVanilla OR BuildJK2SPRdVanilla)
 					COMPONENT ${Component})
 			endif()
 		endif()
+		endif(NOT SPRDVanillaStatic)
 
 		set_target_properties(${ProjectName} PROPERTIES COMPILE_DEFINITIONS "${SPRDVanillaDefines}")
 
@@ -197,6 +205,10 @@ if(BuildSPRdVanilla OR BuildJK2SPRdVanilla)
 	endif(BuildSPRdVanilla)
 	if(BuildJK2SPRdVanilla)
 		set(SPRDVanillaDefines ${SPRDVanillaDefines} "JK2_MODE")
+		if(BuildJK2SPStatic)
+			set(SPRDVanillaDefines ${SPRDVanillaDefines} "USE_STATIC_MODULES")
+			set(SPRDVanillaStatic ON)
+		endif()
 		add_sp_renderer_project(${JK2SPVanillaRenderer} "JK2 SP Vanilla Renderer" ${JK2SPEngine} ${JK2InstallDir} ${JK2SPClientComponent})
 	endif(BuildJK2SPRdVanilla)
 

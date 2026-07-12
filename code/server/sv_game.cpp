@@ -885,6 +885,11 @@ SV_InitGameProgs
 Init the game subsystem for a new map
 ===============
 */
+#ifdef USE_STATIC_MODULES
+// Game module is statically linked into the engine.
+extern "C" GetGameAPIProc GetGameAPI;
+#endif
+
 void SV_InitGameProgs (void) {
 	game_import_t	import;
 	int				i;
@@ -1054,10 +1059,16 @@ void SV_InitGameProgs (void) {
 	const char *gamename = "jagame";
 #endif
 
+#ifdef USE_STATIC_MODULES
+	// Game module is statically linked into the engine; call its entry point
+	// directly instead of loading it at runtime.
+	gameLibrary = NULL;
+#else
 	GetGameAPIProc *GetGameAPI;
 	gameLibrary = Sys_LoadSPGameDll( gamename, &GetGameAPI );
 	if ( !gameLibrary )
 		Com_Error( ERR_DROP, "Failed to load %s library", gamename );
+#endif
 
 	ge = (game_export_t *)GetGameAPI( &import );
 	if (!ge)

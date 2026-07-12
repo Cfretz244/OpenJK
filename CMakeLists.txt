@@ -50,6 +50,16 @@ option(BuildSPRdVanilla "Whether to create projects for the SP default renderer 
 option(BuildJK2SPEngine "Whether to create projects for the jk2 SP engine (openjo_sp.exe)" OFF)
 option(BuildJK2SPGame "Whether to create projects for the jk2 sp gamecode mod (jk2gamex86.dll)" OFF)
 option(BuildJK2SPRdVanilla "Whether to create projects for the jk2 sp renderer (rdjosp-vanilla_x86.dll)" OFF)
+option(BuildJK2SPStatic "Whether to statically link the jk2 sp gamecode and renderer into the engine instead of loading them at runtime (needed on platforms without dlopen, e.g. iOS)" OFF)
+
+if(BuildJK2SPStatic)
+	if(NOT APPLE)
+		message(FATAL_ERROR "BuildJK2SPStatic is currently only implemented for Apple platforms (uses ld -r prelinking)")
+	endif()
+	if(NOT (BuildJK2SPEngine AND BuildJK2SPGame AND BuildJK2SPRdVanilla))
+		message(FATAL_ERROR "BuildJK2SPStatic requires BuildJK2SPEngine, BuildJK2SPGame and BuildJK2SPRdVanilla")
+	endif()
+endif()
 
 option(BuildTests "Whether to build automatic unit tests (requires Boost)" OFF)
 option(UseAddressSanitizer "Whether to enable runtime address sanitizer" OFF)

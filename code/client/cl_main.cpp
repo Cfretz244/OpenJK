@@ -1081,15 +1081,23 @@ static CMiniHeap *GetG2VertSpaceServer( void ) {
 #define DEFAULT_RENDER_LIBRARY	"rdsp-vanilla"
 #endif
 
+#ifdef USE_STATIC_MODULES
+// Renderer is statically linked into the engine; call its entry point directly.
+extern "C" refexport_t* QDECL GetRefAPI( int apiVersion, refimport_t *refimp );
+#endif
+
 void CL_InitRef( void ) {
 	refexport_t	*ret;
 	static refimport_t rit;
+#ifndef USE_STATIC_MODULES
 	char		dllName[MAX_OSPATH];
 	GetRefAPI_t	GetRefAPI;
+#endif
 
 	Com_Printf( "----- Initializing Renderer ----\n" );
     cl_renderer = Cvar_Get( "cl_renderer", DEFAULT_RENDER_LIBRARY, CVAR_ARCHIVE|CVAR_LATCH );
 
+#ifndef USE_STATIC_MODULES
 	Com_sprintf( dllName, sizeof( dllName ), "%s_" ARCH_STRING DLL_EXT, cl_renderer->string );
 
 	if( !(rendererLib = Sys_LoadDll( dllName, qfalse )) && strcmp( cl_renderer->string, cl_renderer->resetString ) )
@@ -1104,12 +1112,15 @@ void CL_InitRef( void ) {
 	if ( !rendererLib ) {
 		Com_Error( ERR_FATAL, "Failed to load renderer\n" );
 	}
+#endif
 
 	memset( &rit, 0, sizeof( rit ) );
 
+#ifndef USE_STATIC_MODULES
 	GetRefAPI = (GetRefAPI_t)Sys_LoadFunction( rendererLib, "GetRefAPI" );
 	if ( !GetRefAPI )
 		Com_Error( ERR_FATAL, "Can't load symbol GetRefAPI: '%s'", Sys_LibraryError() );
+#endif
 
 #define RIT(y)	rit.y = y
 	RIT(CIN_PlayCinematic);

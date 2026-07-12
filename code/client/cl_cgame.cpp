@@ -58,6 +58,22 @@ extern qboolean R_inPVS( vec3_t p1, vec3_t p2 );
 
 void UI_SetActiveMenu( const char* menuname,const char *menuID );
 
+#ifdef USE_STATIC_MODULES
+// Game module is statically linked into the engine; reference its entry
+// points directly. The cgame's vmMain is renamed cgame_vmMain in this
+// configuration because the in-engine UI already exports a vmMain.
+extern "C" void QDECL dllEntry( intptr_t (QDECL *syscallptr)( intptr_t arg, ... ) );
+extern "C" intptr_t QDECL cgame_vmMain( int command, intptr_t arg0, intptr_t arg1, intptr_t arg2, intptr_t arg3, intptr_t arg4, intptr_t arg5, intptr_t arg6, intptr_t arg7 );
+
+qboolean CL_InitCGameVM( void *gameLibrary )
+{
+	cgvm.entryPoint = cgame_vmMain;
+
+	dllEntry( VM_DllSyscall );
+
+	return qtrue;
+}
+#else
 qboolean CL_InitCGameVM( void *gameLibrary )
 {
 	typedef intptr_t SyscallProc( intptr_t, ... );
@@ -86,6 +102,7 @@ qboolean CL_InitCGameVM( void *gameLibrary )
 
 	return qtrue;
 }
+#endif
 
 /*
 ====================
