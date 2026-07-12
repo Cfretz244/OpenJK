@@ -423,9 +423,9 @@ if(BuildSPEngine OR BuildJK2SPEngine)
 
 				add_executable(${ProjectName} MACOSX_BUNDLE ${SPEngineFiles})
 				set_target_properties(${ProjectName} PROPERTIES MACOSX_BUNDLE_INFO_PLIST "${SPDirName}/macosx/OpenJKInfo.plist")
-			else(MakeApplicationBundles)
+			else()
 				add_executable(${ProjectName} ${SPEngineFiles})
-			endif(MakeApplicationBundles)
+			endif()
 		endif(WIN32)
 
 		if(MakeApplicationBundles)
