@@ -755,9 +755,19 @@ window_t WIN_Init( const windowDesc_t *windowDesc, glconfig_t *glConfig )
 	r_ext_multisample	= Cvar_Get( "r_ext_multisample",	"0",		CVAR_ARCHIVE_ND|CVAR_LATCH );
 	Cvar_Get( "r_availableModes", "", CVAR_ROM );
 
+#ifdef __IPHONEOS__
+	// iOS has exactly one sensible display mode: fullscreen at the native
+	// resolution (mode -2). Force it regardless of any archived config.
+	const int window_mode = -2;
+	const qboolean window_fullscreen = qtrue;
+#else
+	const int window_mode = r_mode->integer;
+	const qboolean window_fullscreen = (qboolean)r_fullscreen->integer;
+#endif
+
 	// Create the window and set up the context
-	if(!GLimp_StartDriverAndSetMode( glConfig, windowDesc, r_mode->integer,
-										(qboolean)r_fullscreen->integer, (qboolean)r_noborder->integer ))
+	if(!GLimp_StartDriverAndSetMode( glConfig, windowDesc, window_mode,
+										window_fullscreen, (qboolean)r_noborder->integer ))
 	{
 		if( r_mode->integer != R_MODE_FALLBACK )
 		{

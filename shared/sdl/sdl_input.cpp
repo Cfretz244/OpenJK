@@ -628,7 +628,11 @@ void IN_Init( void *windowData )
 	in_mouse = Cvar_Get( "in_mouse", "1", CVAR_ARCHIVE );
 	in_nograb = Cvar_Get( "in_nograb", "0", CVAR_ARCHIVE_ND );
 
+#if !defined(__ANDROID__) && !defined(__IPHONEOS__)
+	// Mobile: starting text input immediately summons the on-screen
+	// keyboard over the game; leave it off until actually needed.
 	SDL_StartTextInput( );
+#endif
 
 	mouseAvailable = (qboolean)( in_mouse->value != 0 );
 	if ( in_mouse->integer == 2 ) {
