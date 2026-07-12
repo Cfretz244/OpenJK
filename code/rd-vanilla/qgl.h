@@ -323,7 +323,13 @@ typedef GLclampf GLclampd;
 #define qglStencilFunc glStencilFunc
 #define qglStencilMask glStencilMask
 #define qglStencilOp glStencilOp
-#if defined(__APPLE__)
+#if defined(USE_GLES1) && defined(__APPLE__)
+// iOS's ES 1.1 headers have no glStencilOpSeparate (no two-sided stencil).
+// The only call site is gated on doStencilShadowsInOneDrawcall, which
+// tr_init forces off under GLES1, so a stub just needs to satisfy the
+// compiler.
+static inline void qglStencilOpSeparate(GLenum, GLenum, GLenum, GLenum) {}
+#elif defined(__APPLE__)
 #define qglStencilOpSeparate glStencilOpSeparate
 #endif
 #define qglTexCoord1d glTexCoord1d

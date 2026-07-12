@@ -779,7 +779,13 @@ static void GLimp_InitExtensions( void )
 	glConfig.doStencilShadowsInOneDrawcall = qfalse;
 #endif
 #else
+#ifdef USE_GLES1
+	// iOS ES 1.1 has no glStencilOpSeparate (qgl.h stubs it); force the
+	// slower two-pass stencil shadow path.
+	glConfig.doStencilShadowsInOneDrawcall = qfalse;
+#else
 	glConfig.doStencilShadowsInOneDrawcall = qtrue;
+#endif
 #endif
 }
 

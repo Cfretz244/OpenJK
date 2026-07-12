@@ -34,6 +34,10 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include <signal.h>
 #include <sys/resource.h>
 
+#ifdef __APPLE__
+#include <TargetConditionals.h>
+#endif
+
 #include "qcommon/q_version.h"
 #include "qcommon/qcommon.h"
 #include "qcommon/q_shared.h"
@@ -480,6 +484,22 @@ Sys_DefaultHomePath
 char *Sys_DefaultHomePath(void)
 {
 	return NULL;
+}
+#elif defined(MACOS_X) && defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE
+char *Sys_DefaultHomePath(void)
+{
+	// iOS: use the app sandbox's Documents folder. It is exposed in the
+	// Files app (UIFileSharingEnabled), which is how the user supplies the
+	// game's pk3 assets.
+	char *p;
+
+	if ( !homePath[0] )
+	{
+		if ( (p = getenv( "HOME" )) != NULL )
+			Com_sprintf( homePath, sizeof( homePath ), "%s%cDocuments", p, PATH_SEP );
+	}
+
+	return homePath;
 }
 #elif defined(MACOS_X)
 char *Sys_DefaultHomePath(void)

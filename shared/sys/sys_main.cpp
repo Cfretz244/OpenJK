@@ -740,6 +740,12 @@ char *Sys_StripAppBundle( char *dir )
 #	endif
 #endif
 
+#ifdef USE_SDL_MAIN
+// iOS: SDL owns the real main() (it must run the UIKit application loop) and
+// calls ours instead — this include renames main to SDL_main.
+#include <SDL_main.h>
+#endif
+
 int main ( int argc, char* argv[] )
 {
 	int		i;

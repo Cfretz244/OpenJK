@@ -137,7 +137,12 @@ if(WIN32)
 	endif()
 else()
 	set(X86 OFF)
-	if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64)$")
+	if(APPLE AND CMAKE_OSX_ARCHITECTURES MATCHES "^arm64$")
+		# Cross builds (e.g. iOS) may not populate CMAKE_SYSTEM_PROCESSOR;
+		# on Apple the target architecture is authoritative.
+		set(Architecture "arm64")
+		add_definitions(-DPNG_ARM_NEON_OPT=0)
+	elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64)$")
 		set(Architecture "arm64")
 		add_definitions(-DPNG_ARM_NEON_OPT=0)
 	elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "^arm")

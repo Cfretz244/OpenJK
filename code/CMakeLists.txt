@@ -47,7 +47,12 @@ if(BuildSPEngine OR BuildJK2SPEngine)
 
 	#    Dependencies
 
-	if (NOT WIN32)
+	if(IOS)
+		# The renderer (statically linked on iOS) uses OpenGL ES 1.1.
+		set(SPEngineLibraries ${SPEngineLibraries} "-framework OpenGLES")
+		# SDL provides the real main() on iOS (UIKit application loop).
+		set(SPEngineDefines ${SPEngineDefines} "USE_SDL_MAIN")
+	elseif (NOT WIN32)
 		# OpenGL
 		find_package(OpenGL REQUIRED)
 		set(SPEngineIncludeDirectories ${SPEngineIncludeDirectories} ${OPENGL_INCLUDE_DIR})
@@ -99,11 +104,18 @@ if(BuildSPEngine OR BuildJK2SPEngine)
 			)
 	else()
 		find_package(SDL2 REQUIRED CONFIG)
-		if (TARGET SDL2::SDL2)
+		if (IOS AND TARGET SDL2::SDL2-static)
+			# iOS links SDL statically; SDL2main supplies the real main().
+			set(SDL2_INCLUDE_DIRS "")
+			set(SDL2_LIBRARIES SDL2::SDL2main SDL2::SDL2-static)
+		elseif (TARGET SDL2::SDL2)
 			set(SDL2_INCLUDE_DIRS "")
 			set(SDL2_LIBRARIES SDL2::SDL2)
 		endif()
-		string(STRIP ${SDL2_LIBRARIES} SDL2_LIBRARIES)
+		list(LENGTH SDL2_LIBRARIES SDL2LibraryCount)
+		if(SDL2LibraryCount EQUAL 1)
+			string(STRIP ${SDL2_LIBRARIES} SDL2_LIBRARIES)
+		endif()
 		set(SPEngineIncludeDirectories ${SPEngineIncludeDirectories} ${SDL2_INCLUDE_DIRS})
 		set(SPEngineLibraries ${SPEngineLibraries} ${SDL2_LIBRARIES})
 	endif()
@@ -397,12 +409,18 @@ if(BuildSPEngine OR BuildJK2SPEngine)
 				endif()
 			endif()
 		else(WIN32)
-			if(MakeApplicationBundles)
+			if(MakeApplicationBundles AND IOS)
+				add_executable(${ProjectName} MACOSX_BUNDLE ${SPEngineFiles})
+				set_target_properties(${ProjectName} PROPERTIES
+					MACOSX_BUNDLE_INFO_PLIST "${SharedDir}/ios/Info.plist"
+					MACOSX_BUNDLE_GUI_IDENTIFIER "org.openjk.openjo-sp"
+					MACOSX_BUNDLE_BUNDLE_NAME "OpenJO")
+			elseif(MakeApplicationBundles)
 				set_source_files_properties(${SPDirName}/macosx/OpenJK.icns PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
 				set(SPEngineFiles ${SPEngineFiles} ${SPDirName}/macosx/OpenJK.icns)
 				set_source_files_properties(${SPDirName}/macosx/English.lproj/InfoPlist.strings PROPERTIES MACOSX_PACKAGE_LOCATION Resources/English.lproj)
 				set(SPEngineFiles ${SPEngineFiles} ${SPDirName}/macosx/English.lproj/InfoPlist.strings)
-				
+
 				add_executable(${ProjectName} MACOSX_BUNDLE ${SPEngineFiles})
 				set_target_properties(${ProjectName} PROPERTIES MACOSX_BUNDLE_INFO_PLIST "${SPDirName}/macosx/OpenJKInfo.plist")
 			else(MakeApplicationBundles)
@@ -411,12 +429,16 @@ if(BuildSPEngine OR BuildJK2SPEngine)
 		endif(WIN32)
 
 		if(MakeApplicationBundles)
-			install(CODE "
-				include(BundleUtilities)
-				set(BU_CHMOD_BUNDLE_ITEMS ON)
-				fixup_bundle(\"${CMAKE_BINARY_DIR}/${ProjectName}.app\" \"\" \"\")
-				"
-				COMPONENT Runtime)
+			if(NOT IOS)
+				# iOS bundles are fully static; nothing to fix up (and
+				# BundleUtilities does not support iOS layouts anyway).
+				install(CODE "
+					include(BundleUtilities)
+					set(BU_CHMOD_BUNDLE_ITEMS ON)
+					fixup_bundle(\"${CMAKE_BINARY_DIR}/${ProjectName}.app\" \"\" \"\")
+					"
+					COMPONENT Runtime)
+			endif()
 			install(TARGETS ${ProjectName}
 				BUNDLE
 				DESTINATION ${InstallDir}
@@ -468,8 +490,17 @@ if(BuildSPEngine OR BuildJK2SPEngine)
 			else()
 				set(JK2SPPrelinkArch "")
 			endif()
+			if(IOS)
+				if(CMAKE_OSX_SYSROOT MATCHES "[Ss]imulator")
+					set(JK2SPPrelinkPlatformName ios-simulator)
+				else()
+					set(JK2SPPrelinkPlatformName ios)
+				endif()
+			else()
+				set(JK2SPPrelinkPlatformName macos)
+			endif()
 			if(CMAKE_OSX_DEPLOYMENT_TARGET)
-				set(JK2SPPrelinkPlatform -platform_version macos ${CMAKE_OSX_DEPLOYMENT_TARGET} ${CMAKE_OSX_DEPLOYMENT_TARGET})
+				set(JK2SPPrelinkPlatform -platform_version ${JK2SPPrelinkPlatformName} ${CMAKE_OSX_DEPLOYMENT_TARGET} ${CMAKE_OSX_DEPLOYMENT_TARGET})
 			else()
 				set(JK2SPPrelinkPlatform "")
 			endif()
