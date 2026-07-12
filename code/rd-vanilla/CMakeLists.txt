@@ -36,6 +36,11 @@ if(BuildSPRdVanilla OR BuildJK2SPRdVanilla)
 	# Defines
 	set(SPRDVanillaDefines ${SharedDefines} "RENDERER" "_JK2EXE")
 
+	if(ANDROID OR IOS)
+		# rd-vanilla renders through OpenGL ES 1.1 on mobile.
+		set(SPRDVanillaDefines ${SPRDVanillaDefines} "USE_GLES1")
+	endif()
+
 	# Files
 
 	# GHOUL 2
@@ -149,9 +154,18 @@ if(BuildSPRdVanilla OR BuildJK2SPRdVanilla)
 	source_group("rd-common" FILES ${SPRDVanillaRdCommonFiles})
 	set(SPRDVanillaFiles ${SPRDVanillaFiles} ${SPRDVanillaRdCommonFiles})
 
-	find_package(OpenGL REQUIRED)
-	set(SPRDVanillaRendererIncludeDirectories ${SPRDVanillaRendererIncludeDirectories} ${OPENGL_INCLUDE_DIR})
-	set(SPRDVanillaRendererLibraries ${SPRDVanillaRendererLibraries} ${OPENGL_LIBRARIES})
+	if(ANDROID)
+		# OpenGL ES 1.x Common profile (+ EGL) from the NDK; rd-vanilla is a
+		# fixed-function renderer, so it targets GLES1, not ES2/ES3.
+		set(SPRDVanillaRendererLibraries ${SPRDVanillaRendererLibraries} GLESv1_CM EGL)
+	elseif(IOS)
+		# OpenGL ES 1.1 via OpenGLES.framework (deprecated but still shipping).
+		set(SPRDVanillaRendererLibraries ${SPRDVanillaRendererLibraries} "-framework OpenGLES")
+	else()
+		find_package(OpenGL REQUIRED)
+		set(SPRDVanillaRendererIncludeDirectories ${SPRDVanillaRendererIncludeDirectories} ${OPENGL_INCLUDE_DIR})
+		set(SPRDVanillaRendererLibraries ${SPRDVanillaRendererLibraries} ${OPENGL_LIBRARIES})
+	endif()
 
 	set(SPRDVanillaRendererIncludeDirectories ${SPRDVanillaRendererIncludeDirectories} ${OpenJKLibDir})
 
@@ -163,8 +177,9 @@ if(BuildSPRdVanilla OR BuildJK2SPRdVanilla)
 		else()
 			add_library(${ProjectName} SHARED ${SPRDVanillaFiles})
 		endif()
-		if(NOT MSVC)
+		if(NOT MSVC AND NOT ANDROID)
 			# remove "lib" prefix for .so/.dylib files
+			# (Android keeps the "lib" prefix so the .so is packaged into the APK)
 			set_target_properties(${ProjectName} PROPERTIES PREFIX "")
 		endif()
 
