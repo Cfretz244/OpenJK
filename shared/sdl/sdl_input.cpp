@@ -604,7 +604,7 @@ static void IN_InitJoystick( void )
 	in_joystickUseAnalog = Cvar_Get( "in_joystickUseAnalog", "0", CVAR_ARCHIVE_ND );
 
 	in_joystickThreshold = Cvar_Get( "joy_threshold", "0.15", CVAR_ARCHIVE_ND );
-	in_gamepadLookSpeed = Cvar_Get( "in_gamepadLookSpeed", "40", CVAR_ARCHIVE_ND );
+	in_gamepadLookSpeed = Cvar_Get( "in_gamepadLookSpeed", "30", CVAR_ARCHIVE_ND );
 
 	// Prefer the game controller interface: standardized stick/button
 	// layout for any pad SDL recognizes (MFi, DualSense, Xbox, ...).
@@ -1127,7 +1127,7 @@ static void IN_GamepadMove( void )
 			int dx, dy;
 			float scale = in_gamepadLookSpeed->value * ( dt / 16.0f );
 			lookRemainder[0] += fx * scale;
-			lookRemainder[1] += fy * scale;
+			lookRemainder[1] += fy * scale * 0.75f;	// pitch reads faster than yaw at equal speed
 			dx = (int)lookRemainder[0];
 			dy = (int)lookRemainder[1];
 			lookRemainder[0] -= dx;
