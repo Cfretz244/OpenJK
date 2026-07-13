@@ -41,6 +41,10 @@ static cvar_t *in_joystickThreshold = NULL;
 static cvar_t *in_joystickNo        = NULL;
 static cvar_t *in_joystickUseAnalog = NULL;
 static cvar_t *in_gamepadLookSpeed  = NULL;
+static cvar_t *in_gamepadConsoleChord = NULL;
+
+// Hold both stick-clicks this long to toggle the console.
+#define GAMEPAD_CONSOLE_CHORD_MS 400
 
 static SDL_Window *SDL_window = NULL;
 
@@ -605,6 +609,7 @@ static void IN_InitJoystick( void )
 
 	in_joystickThreshold = Cvar_Get( "joy_threshold", "0.15", CVAR_ARCHIVE_ND );
 	in_gamepadLookSpeed = Cvar_Get( "in_gamepadLookSpeed", "30", CVAR_ARCHIVE_ND );
+	in_gamepadConsoleChord = Cvar_Get( "in_gamepadConsoleChord", "1", CVAR_ARCHIVE_ND );
 
 	// Prefer the game controller interface: standardized stick/button
 	// layout for any pad SDL recognizes (MFi, DualSense, Xbox, ...).
@@ -1050,11 +1055,40 @@ static void IN_GamepadMove( void )
 	static qboolean oldTriggers[2] = { qfalse, qfalse };
 	static int oldMoveAxes[2] = { 0, 0 };
 	static float lookRemainder[2] = { 0.0f, 0.0f };
+	static int chordStartTime = 0;
+	static qboolean chordFired = qfalse;
 
 	const float deadzone = in_joystickThreshold->value;
 	size_t i;
 
 	SDL_GameControllerUpdate();
+
+	// Holding both stick-clicks toggles the console: the pad has no tilde,
+	// and on mobile there is no keyboard at all. The individual presses
+	// still forward as their mapped keys first (no latency added to the
+	// saber-style/zoom taps), so chording mid-game blips those actions
+	// once — accepted. Once fired, both sticks' key events are swallowed
+	// until both are released, and the console toggle itself releases the
+	// two mapped keys so no +action can stay stuck.
+	qboolean chordL3 = (qboolean)( SDL_GameControllerGetButton( gamepad, SDL_CONTROLLER_BUTTON_LEFTSTICK ) != 0 );
+	qboolean chordR3 = (qboolean)( SDL_GameControllerGetButton( gamepad, SDL_CONTROLLER_BUTTON_RIGHTSTICK ) != 0 );
+
+	if ( in_gamepadConsoleChord->integer && chordL3 && chordR3 )
+	{
+		if ( !chordStartTime )
+			chordStartTime = Sys_Milliseconds();
+
+		if ( !chordFired && Sys_Milliseconds() - chordStartTime >= GAMEPAD_CONSOLE_CHORD_MS )
+		{
+			Sys_QueEvent( 0, SE_KEY, A_LOW_L, qfalse, 0, NULL );
+			Sys_QueEvent( 0, SE_KEY, A_LOW_G, qfalse, 0, NULL );
+			Sys_QueEvent( 0, SE_KEY, A_CONSOLE, qtrue, 0, NULL );
+			Sys_QueEvent( 0, SE_KEY, A_CONSOLE, qfalse, 0, NULL );
+			chordFired = qtrue;
+		}
+	}
+	else
+		chordStartTime = 0;
 
 	// buttons -> key events
 	for ( i = 0; i < sizeof( buttonMap ) / sizeof( buttonMap[0] ); i++ )
@@ -1063,13 +1097,24 @@ static void IN_GamepadMove( void )
 		qboolean was = (qboolean)( ( oldButtons & ( 1u << i ) ) != 0 );
 		if ( pressed != was )
 		{
-			Sys_QueEvent( 0, SE_KEY, buttonMap[i].key, pressed, 0, NULL );
+			// While the console chord is active the stick-click keys were
+			// force-released; keep the mask honest but emit nothing.
+			qboolean swallowed = (qboolean)( chordFired &&
+				( buttonMap[i].button == SDL_CONTROLLER_BUTTON_LEFTSTICK ||
+				  buttonMap[i].button == SDL_CONTROLLER_BUTTON_RIGHTSTICK ) );
+			if ( !swallowed )
+				Sys_QueEvent( 0, SE_KEY, buttonMap[i].key, pressed, 0, NULL );
 			if ( pressed )
 				oldButtons |= 1u << i;
 			else
 				oldButtons &= ~( 1u << i );
 		}
 	}
+
+	// Release the chord latch only after the button loop so the sticks'
+	// own release transitions are swallowed above rather than emitted.
+	if ( !chordL3 && !chordR3 )
+		chordFired = qfalse;
 
 	// triggers -> primary / alt attack (and menu click on the right trigger)
 	{
@@ -1375,6 +1420,26 @@ void IN_Frame (void) {
 		IN_ActivateMouse( );
 
 	IN_ProcessEvents( );
+
+#if defined(__ANDROID__) || defined(__IPHONEOS__)
+	// Mobile: tie the on-screen keyboard to the console (desktop starts
+	// text input once at IN_Init instead). Track our own edge state, not
+	// SDL_IsTextInputActive(): the UIKit backend toggles that on keyboard
+	// show/hide itself, so polling it would re-summon a keyboard the user
+	// dismissed with the system key.
+	{
+		static qboolean kbForConsole = qfalse;
+		qboolean consoleOpen = (qboolean)( ( Key_GetCatcher( ) & KEYCATCH_CONSOLE ) != 0 );
+		if ( consoleOpen != kbForConsole )
+		{
+			if ( consoleOpen )
+				SDL_StartTextInput( );
+			else
+				SDL_StopTextInput( );
+			kbForConsole = consoleOpen;
+		}
+	}
+#endif
 }
 
 /*
