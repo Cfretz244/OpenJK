@@ -37,6 +37,10 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #endif
 #include <minizip/unzip.h>
 
+#ifdef __APPLE__
+#include <TargetConditionals.h>
+#endif
+
 // for rmdir
 #if defined (_MSC_VER)
 	#include <direct.h>
@@ -2916,6 +2920,19 @@ void FS_Startup( const char *gameName ) {
 	// !Sys_PathCmp(fs_homepath->string, fs_basepath->string)
 	if (fs_homepath->string[0] && Q_stricmp(fs_homepath->string, fs_basepath->string)) {
 		FS_CreatePath ( fs_homepath->string );
+#if defined(__APPLE__) && defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE
+		// iOS: pre-create <homepath>/<game>/ so the directory is owned by
+		// the app. If it is first created by an external file-transfer tool
+		// (Finder/devicectl pushing the asset pk3s), the app may be unable
+		// to create subdirectories in it (saves, etc). Creating it here,
+		// before assets arrive, also gives the user a visible drop target
+		// in the Files app.
+		{
+			char basegamedir[MAX_OSPATH];
+			Com_sprintf( basegamedir, sizeof( basegamedir ), "%s%c%s%c", fs_homepath->string, PATH_SEP, gameName, PATH_SEP );
+			FS_CreatePath( basegamedir );
+		}
+#endif
 		FS_AddGameDirectory ( fs_homepath->string, gameName );
 	}
 
