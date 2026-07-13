@@ -285,6 +285,7 @@ vmCvar_t	cg_autoswitch;
 vmCvar_t	cg_simpleItems;
 vmCvar_t	cg_fov;
 vmCvar_t	cg_fovAspectAdjust;
+vmCvar_t	cg_aspectCorrect2D;	// mirror of the renderer cvar
 vmCvar_t	cg_missionstatusscreen;
 vmCvar_t	cg_endcredits;
 vmCvar_t	cg_updatedDataPadForcePower1;
@@ -353,6 +354,7 @@ static cvarTable_t cvarTable[] = {
 #if defined(__ANDROID__) || (defined(__APPLE__) && defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE)
 	// mobile screens are wide; a 4:3 FOV looks zoomed-in without Hor+ correction
 	{ &cg_fovAspectAdjust, "cg_fovAspectAdjust", "1", CVAR_ARCHIVE },
+	{ &cg_aspectCorrect2D, "r_aspectCorrect2D", "0", CVAR_ARCHIVE_ND },
 #else
 	{ &cg_fovAspectAdjust, "cg_fovAspectAdjust", "0", CVAR_ARCHIVE },
 #endif

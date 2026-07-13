@@ -1363,6 +1363,17 @@ void CG_DrawIconBackground(void)
 			xAdd = 0;
 		}
 
+		// On aspect-corrected wide screens the corner gauges sit at the real
+		// screen edges; slide the idle prongs out with them so they still
+		// nestle over the gauges as on 4:3 (otherwise they float mid-screen).
+		if ( !cg.iconHUDActive && cg_aspectCorrect2D.integer &&
+			 cgs.glconfig.vidWidth * 3 > cgs.glconfig.vidHeight * 4 )
+		{
+			int hudEdgeShift = (int)( 320.0f * ( ( (float)cgs.glconfig.vidWidth * 3.0f ) / ( (float)cgs.glconfig.vidHeight * 4.0f ) - 1.0f ) );
+			prongLeftX -= hudEdgeShift;
+			prongRightX += hudEdgeShift;
+		}
+
 		cgi_R_SetColor( colorTable[CT_WHITE] );
 		CG_DrawPic( prongLeftX+xAdd, y2-10, 40, 80, cgs.media.weaponProngsOff);
 		CG_DrawPic( prongRightX-xAdd, y2-10, -40, 80, cgs.media.weaponProngsOff);
