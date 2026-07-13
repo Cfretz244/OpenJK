@@ -5739,6 +5739,24 @@ void Menu_PostParse(menuDef_t *menu)
 		menu->window.rect.w = 640;
 		menu->window.rect.h = 480;
 	}
+
+	// Under r_aspectCorrect2D the corner-anchored HUD menus should hug the
+	// real screen edges, not the centered 4:3 box — shift them into the
+	// widened margin. (DC->xbias/DC->xscale is the margin width in virtual
+	// 640-space units; menus reparse on restart, so this stays idempotent.)
+	if ( DC && DC->xbias > 0.0f )
+	{
+		float hudEdgeShift = DC->xbias / DC->xscale;
+		if ( !Q_stricmp( menu->window.name, "lefthud" ) )
+		{
+			menu->window.rect.x -= hudEdgeShift;
+		}
+		else if ( !Q_stricmp( menu->window.name, "righthud" ) )
+		{
+			menu->window.rect.x += hudEdgeShift;
+		}
+	}
+
 	Menu_UpdatePosition(menu);
 }
 
