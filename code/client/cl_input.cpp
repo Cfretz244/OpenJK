@@ -492,7 +492,15 @@ void CL_JoystickMove( usercmd_t *cmd ) {
 		anglespeed = 0.001 * cls.frametime;
 	}
 
-	if ( !in_strafe.active ) {
+	// Modern dual-stick controllers strafe with the left stick — the view is
+	// driven separately (right stick, through the mouse path). Classic
+	// single-stick joysticks yaw with AXIS_SIDE unless +strafe is held.
+	static cvar_t *in_joystickDualStick = NULL;
+	if ( !in_joystickDualStick ) {
+		in_joystickDualStick = Cvar_Get( "in_joystickDualStick", "1", CVAR_ARCHIVE_ND );
+	}
+
+	if ( !in_joystickDualStick->integer && !in_strafe.active ) {
 		if ( cl_mYawOverride )
 		{
 			cl.viewangles[YAW] += 5.0f * cl_mYawOverride * cl.joystickAxis[AXIS_SIDE];

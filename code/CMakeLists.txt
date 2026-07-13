@@ -410,11 +410,25 @@ if(BuildSPEngine OR BuildJK2SPEngine)
 			endif()
 		else(WIN32)
 			if(MakeApplicationBundles AND IOS)
+				# App icons are derived from the (non-redistributable) game
+				# assets, so they are supplied externally at build time.
+				set(JK2SPIconDir "" CACHE PATH "Directory containing AppIcon*.png files to embed in the iOS bundle")
+				if(JK2SPIconDir)
+					file(GLOB JK2SPIconFiles "${JK2SPIconDir}/AppIcon*.png")
+					if(JK2SPIconFiles)
+						set_source_files_properties(${JK2SPIconFiles} PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
+						set(SPEngineFiles ${SPEngineFiles} ${JK2SPIconFiles})
+					endif()
+				endif()
+
 				add_executable(${ProjectName} MACOSX_BUNDLE ${SPEngineFiles})
 				set_target_properties(${ProjectName} PROPERTIES
 					MACOSX_BUNDLE_INFO_PLIST "${SharedDir}/ios/Info.plist"
 					MACOSX_BUNDLE_GUI_IDENTIFIER "org.openjk.openjo-sp"
-					MACOSX_BUNDLE_BUNDLE_NAME "OpenJO")
+					MACOSX_BUNDLE_BUNDLE_NAME "Jedi Outcast"
+					# keep @2x/@3x icon PNGs as-is; the combined-tiff
+					# treatment is a macOS-ism the iOS home screen can't read
+					XCODE_ATTRIBUTE_COMBINE_HIDPI_IMAGES "NO")
 			elseif(MakeApplicationBundles)
 				set_source_files_properties(${SPDirName}/macosx/OpenJK.icns PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
 				set(SPEngineFiles ${SPEngineFiles} ${SPDirName}/macosx/OpenJK.icns)

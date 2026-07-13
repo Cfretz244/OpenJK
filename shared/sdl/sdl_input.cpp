@@ -28,6 +28,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 static cvar_t *in_keyboardDebug     = NULL;
 
 static SDL_Joystick *stick = NULL;
+static SDL_GameController *gamepad = NULL;
 
 static qboolean mouseAvailable = qfalse;
 static qboolean mouseActive = qfalse;
@@ -39,6 +40,7 @@ cvar_t *in_joystick          		= NULL;
 static cvar_t *in_joystickThreshold = NULL;
 static cvar_t *in_joystickNo        = NULL;
 static cvar_t *in_joystickUseAnalog = NULL;
+static cvar_t *in_gamepadLookSpeed  = NULL;
 
 static SDL_Window *SDL_window = NULL;
 
@@ -545,25 +547,40 @@ static void IN_InitJoystick( void )
 	int total = 0;
 	char buf[16384] = "";
 
+	if (gamepad != NULL)
+		SDL_GameControllerClose(gamepad);
+
+	gamepad = NULL;
+
 	if (stick != NULL)
 		SDL_JoystickClose(stick);
 
 	stick = NULL;
 	memset(&stick_state, '\0', sizeof (stick_state));
 
-	if (!SDL_WasInit(SDL_INIT_JOYSTICK))
+	// Don't expose the device accelerometer as a joystick (iOS/Android) —
+	// it otherwise enumerates as device 0 and its noise drives the legacy
+	// axes-to-keys path.
+	SDL_SetHint(SDL_HINT_ACCELEROMETER_AS_JOYSTICK, "0");
+
+	if (!SDL_WasInit(SDL_INIT_JOYSTICK | SDL_INIT_GAMECONTROLLER))
 	{
-		Com_DPrintf("Calling SDL_Init(SDL_INIT_JOYSTICK)...\n");
-		if (SDL_Init(SDL_INIT_JOYSTICK) == -1)
+		Com_DPrintf("Calling SDL_Init(SDL_INIT_JOYSTICK|SDL_INIT_GAMECONTROLLER)...\n");
+		if (SDL_Init(SDL_INIT_JOYSTICK | SDL_INIT_GAMECONTROLLER) == -1)
 		{
-			Com_DPrintf("SDL_Init(SDL_INIT_JOYSTICK) failed: %s\n", SDL_GetError());
+			Com_DPrintf("SDL_Init(SDL_INIT_JOYSTICK|SDL_INIT_GAMECONTROLLER) failed: %s\n", SDL_GetError());
 			return;
 		}
-		Com_DPrintf("SDL_Init(SDL_INIT_JOYSTICK) passed.\n");
+		Com_DPrintf("SDL_Init(SDL_INIT_JOYSTICK|SDL_INIT_GAMECONTROLLER) passed.\n");
 	}
 
 	total = SDL_NumJoysticks();
-	Com_DPrintf("%d possible joysticks\n", total);
+	Com_Printf("%d joystick(s) detected\n", total);
+	for (i = 0; i < total; i++)
+	{
+		Com_Printf("  %d: %s%s\n", i, SDL_JoystickNameForIndex(i),
+			SDL_IsGameController(i) ? " (game controller)" : " (legacy joystick)");
+	}
 
 	// Print list and build cvar to allow ui to select joystick.
 	for (i = 0; i < total; i++)
@@ -587,6 +604,37 @@ static void IN_InitJoystick( void )
 	in_joystickUseAnalog = Cvar_Get( "in_joystickUseAnalog", "0", CVAR_ARCHIVE_ND );
 
 	in_joystickThreshold = Cvar_Get( "joy_threshold", "0.15", CVAR_ARCHIVE_ND );
+	in_gamepadLookSpeed = Cvar_Get( "in_gamepadLookSpeed", "60", CVAR_ARCHIVE_ND );
+
+	// Prefer the game controller interface: standardized stick/button
+	// layout for any pad SDL recognizes (MFi, DualSense, Xbox, ...).
+	// The configured index may be occupied by a non-controller device
+	// (e.g. a sensor), so fall back to scanning for the first real one.
+	{
+		int padIndex = SDL_IsGameController( in_joystickNo->integer ) ? in_joystickNo->integer : -1;
+		if ( padIndex < 0 )
+		{
+			for ( i = 0; i < total; i++ )
+			{
+				if ( SDL_IsGameController( i ) )
+				{
+					padIndex = i;
+					break;
+				}
+			}
+		}
+		if ( padIndex >= 0 )
+		{
+			gamepad = SDL_GameControllerOpen( padIndex );
+			if ( gamepad )
+			{
+				Com_Printf( "Game controller %d opened: %s\n", padIndex,
+							SDL_GameControllerName( gamepad ) );
+				return;
+			}
+			Com_DPrintf( "SDL_GameControllerOpen failed: %s\n", SDL_GetError() );
+		}
+	}
 
 	stick = SDL_JoystickOpen( in_joystickNo->integer );
 
@@ -622,7 +670,12 @@ void IN_Init( void *windowData )
 	// joystick variables
 	in_keyboardDebug = Cvar_Get( "in_keyboardDebug", "0", CVAR_ARCHIVE_ND );
 
+#if defined(__ANDROID__) || defined(__IPHONEOS__)
+	// Mobile: a paired Bluetooth/MFi controller should just work.
+	in_joystick = Cvar_Get( "in_joystick", "1", CVAR_ARCHIVE_ND|CVAR_LATCH );
+#else
 	in_joystick = Cvar_Get( "in_joystick", "0", CVAR_ARCHIVE_ND|CVAR_LATCH );
+#endif
 
 	// mouse variables
 	in_mouse = Cvar_Get( "in_mouse", "1", CVAR_ARCHIVE );
@@ -917,6 +970,14 @@ static void IN_ProcessEvents( void )
 				}
 				break;
 
+			case SDL_CONTROLLERDEVICEADDED:
+			case SDL_CONTROLLERDEVICEREMOVED:
+				// Hot-plug (e.g. a Bluetooth pad connecting after launch):
+				// re-scan and (re)open the controller.
+				if ( in_joystick && in_joystick->integer )
+					IN_InitJoystick( );
+				break;
+
 			case SDL_QUIT:
 				Cbuf_ExecuteText(EXEC_NOW, "quit Closed window\n");
 				break;
@@ -954,12 +1015,145 @@ static void IN_ProcessEvents( void )
 IN_JoyMove
 ===============
 */
+/*
+===============
+IN_GamepadMove
+
+Modern game controller (SDL_GameController): left stick drives analog
+movement, right stick drives the view through the mouse path (so the menu
+cursor and in-game sensitivity/inversion all apply), buttons and triggers
+are translated to key events.
+===============
+*/
+static void IN_GamepadMove( void )
+{
+	// Buttons are mapped onto keys that default.cfg already binds, so the
+	// pad works without any config and stays user-remappable via those keys.
+	static const struct { SDL_GameControllerButton button; int key; } buttonMap[] = {
+		{ SDL_CONTROLLER_BUTTON_A,             A_SPACE },          // jump (+moveup)
+		{ SDL_CONTROLLER_BUTTON_B,             A_LOW_C },          // crouch (+movedown)
+		{ SDL_CONTROLLER_BUTTON_X,             A_LOW_E },          // +use
+		{ SDL_CONTROLLER_BUTTON_Y,             A_LOW_F },          // +useforce
+		{ SDL_CONTROLLER_BUTTON_LEFTSHOULDER,  A_LOW_Q },          // weapprev
+		{ SDL_CONTROLLER_BUTTON_RIGHTSHOULDER, A_LOW_R },          // weapnext
+		{ SDL_CONTROLLER_BUTTON_START,         A_ESCAPE },         // main menu
+		{ SDL_CONTROLLER_BUTTON_GUIDE,         A_ESCAPE },         // main menu (pads without Start)
+		{ SDL_CONTROLLER_BUTTON_BACK,          A_TAB },            // datapad (mission log)
+		{ SDL_CONTROLLER_BUTTON_LEFTSTICK,     A_LOW_L },          // saberAttackCycle
+		{ SDL_CONTROLLER_BUTTON_RIGHTSTICK,    A_LOW_G },          // zoom
+		{ SDL_CONTROLLER_BUTTON_DPAD_LEFT,     A_LOW_Z },          // forceprev
+		{ SDL_CONTROLLER_BUTTON_DPAD_RIGHT,    A_LOW_X },          // forcenext
+		{ SDL_CONTROLLER_BUTTON_DPAD_UP,       A_CLOSE_SQUARE },   // invnext
+		{ SDL_CONTROLLER_BUTTON_DPAD_DOWN,     A_ENTER },          // invuse
+	};
+	static unsigned int oldButtons = 0;
+	static qboolean oldTriggers[2] = { qfalse, qfalse };
+	static int oldMoveAxes[2] = { 0, 0 };
+	static float lookRemainder[2] = { 0.0f, 0.0f };
+
+	const float deadzone = in_joystickThreshold->value;
+	size_t i;
+
+	SDL_GameControllerUpdate();
+
+	// buttons -> key events
+	for ( i = 0; i < sizeof( buttonMap ) / sizeof( buttonMap[0] ); i++ )
+	{
+		qboolean pressed = (qboolean)( SDL_GameControllerGetButton( gamepad, buttonMap[i].button ) != 0 );
+		qboolean was = (qboolean)( ( oldButtons & ( 1u << i ) ) != 0 );
+		if ( pressed != was )
+		{
+			Sys_QueEvent( 0, SE_KEY, buttonMap[i].key, pressed, 0, NULL );
+			if ( pressed )
+				oldButtons |= 1u << i;
+			else
+				oldButtons &= ~( 1u << i );
+		}
+	}
+
+	// triggers -> primary / alt attack (and menu click on the right trigger)
+	{
+		static const SDL_GameControllerAxis triggerAxes[2] = { SDL_CONTROLLER_AXIS_TRIGGERLEFT, SDL_CONTROLLER_AXIS_TRIGGERRIGHT };
+		static const int triggerKeys[2] = { A_MOUSE2, A_MOUSE1 };
+		int t;
+		for ( t = 0; t < 2; t++ )
+		{
+			qboolean pressed = (qboolean)( SDL_GameControllerGetAxis( gamepad, triggerAxes[t] ) > 32767 / 4 );
+			if ( pressed != oldTriggers[t] )
+			{
+				Sys_QueEvent( 0, SE_KEY, triggerKeys[t], pressed, 0, NULL );
+				oldTriggers[t] = pressed;
+			}
+		}
+	}
+
+	// left stick -> analog movement
+	{
+		static const SDL_GameControllerAxis moveAxes[2] = { SDL_CONTROLLER_AXIS_LEFTX, SDL_CONTROLLER_AXIS_LEFTY };
+		static const int engineAxes[2] = { AXIS_SIDE, AXIS_FORWARD };
+		static const int engineSign[2] = { 1, -1 };	// SDL Y grows downward; forwardmove grows forward
+		int a;
+		for ( a = 0; a < 2; a++ )
+		{
+			float f = SDL_GameControllerGetAxis( gamepad, moveAxes[a] ) / 32767.0f;
+			int value = ( fabsf( f ) < deadzone ) ? 0 : (int)( f * 127.0f ) * engineSign[a];
+			if ( value != oldMoveAxes[a] )
+			{
+				Sys_QueEvent( 0, SE_JOYSTICK_AXIS, engineAxes[a], value, 0, NULL );
+				oldMoveAxes[a] = value;
+			}
+		}
+	}
+
+	// right stick -> view, as relative mouse motion. Frame-time scaled
+	// (in_gamepadLookSpeed = pixels per 16ms at full deflection) with a
+	// squared response curve for precision near the center.
+	{
+		static int lastLookTime = 0;
+		int now = Sys_Milliseconds();
+		int dt = now - lastLookTime;
+		lastLookTime = now;
+		if ( dt < 0 || dt > 100 )
+			dt = 16;
+
+		float fx = SDL_GameControllerGetAxis( gamepad, SDL_CONTROLLER_AXIS_RIGHTX ) / 32767.0f;
+		float fy = SDL_GameControllerGetAxis( gamepad, SDL_CONTROLLER_AXIS_RIGHTY ) / 32767.0f;
+		if ( fabsf( fx ) < deadzone ) fx = 0.0f;
+		if ( fabsf( fy ) < deadzone ) fy = 0.0f;
+		fx *= fabsf( fx );
+		fy *= fabsf( fy );
+		if ( fx != 0.0f || fy != 0.0f )
+		{
+			int dx, dy;
+			float scale = in_gamepadLookSpeed->value * ( dt / 16.0f );
+			lookRemainder[0] += fx * scale;
+			lookRemainder[1] += fy * scale;
+			dx = (int)lookRemainder[0];
+			dy = (int)lookRemainder[1];
+			lookRemainder[0] -= dx;
+			lookRemainder[1] -= dy;
+			if ( dx || dy )
+				Sys_QueEvent( 0, SE_MOUSE, dx, dy, 0, NULL );
+		}
+		else
+		{
+			lookRemainder[0] = lookRemainder[1] = 0.0f;
+		}
+	}
+}
+
 static void IN_JoyMove( void )
 {
 	unsigned int axes = 0;
 	unsigned int hats = 0;
 	int total = 0;
 	int i = 0;
+
+	if (gamepad)
+	{
+		IN_GamepadMove();
+		return;
+	}
 
 	if (!stick)
 		return;
@@ -1193,13 +1387,19 @@ static void IN_ShutdownJoystick( void )
 	if ( !SDL_WasInit( SDL_INIT_JOYSTICK ) )
 		return;
 
+	if (gamepad)
+	{
+		SDL_GameControllerClose(gamepad);
+		gamepad = NULL;
+	}
+
 	if (stick)
 	{
 		SDL_JoystickClose(stick);
 		stick = NULL;
 	}
 
-	SDL_QuitSubSystem(SDL_INIT_JOYSTICK);
+	SDL_QuitSubSystem(SDL_INIT_JOYSTICK | SDL_INIT_GAMECONTROLLER);
 }
 
 void IN_Shutdown( void ) {
