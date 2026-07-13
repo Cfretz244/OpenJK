@@ -29,6 +29,12 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 backEndData_t	*backEndData;
 backEndState_t	backEnd;
 
+// r_aspectCorrect2D bookkeeping: whether a 3D scene has been rendered since
+// the last swap (pure-2D frames get their pillarbox bars cleared to black;
+// frames with a 3D scene keep the world visible behind the centered 2D).
+static qboolean s_sceneRenderedThisFrame = qfalse;
+static qboolean s_barsClearedThisFrame = qfalse;
+
 bool tr_stencilled = false;
 extern qboolean tr_distortionPrePost; //tr_shadows.cpp
 extern qboolean tr_distortionNegate; //tr_shadows.cpp
@@ -457,6 +463,7 @@ static void RB_BeginDrawingView (void) {
 	// we will need to change the projection matrix before drawing
 	// 2D images again
 	backEnd.projection2D = qfalse;
+	s_sceneRenderedThisFrame = qtrue;
 
 	//
 	// set the modelview matrix for the viewer
@@ -983,14 +990,43 @@ RB_SetGL2D
 ================
 */
 void	RB_SetGL2D (void) {
+	float orthoLeft = 0.0f;
+	float orthoRight = 640.0f;
+
 	backEnd.projection2D = qtrue;
+
+	// The 2D layer is authored for a 640x480 (4:3) canvas. On wider
+	// displays, optionally widen the orthographic projection so 0..640
+	// maps onto a centered 4:3 area instead of stretching across the
+	// screen. The viewport stays full-size, so full-screen fills
+	// (cinematic bars, fades) can deliberately draw beyond the 4:3 box —
+	// a pillarboxed viewport would clip them at its edges.
+	if ( r_aspectCorrect2D->integer ) {
+		int w43 = glConfig.vidHeight * 4 / 3;
+		if ( w43 < glConfig.vidWidth ) {
+			float extra = 320.0f * ( (float)glConfig.vidWidth / w43 - 1.0f );
+			orthoLeft = -extra;
+			orthoRight = 640.0f + extra;
+
+			// On pure-2D frames (menus, loading, video) nothing else
+			// covers the side bars — clear them once per frame. When a
+			// 3D scene was rendered, leave it visible behind the 2D.
+			if ( !s_sceneRenderedThisFrame && !s_barsClearedThisFrame ) {
+				qglViewport( 0, 0, glConfig.vidWidth, glConfig.vidHeight );
+				qglScissor( 0, 0, glConfig.vidWidth, glConfig.vidHeight );
+				qglClearColor( 0, 0, 0, 1 );
+				qglClear( GL_COLOR_BUFFER_BIT );
+				s_barsClearedThisFrame = qtrue;
+			}
+		}
+	}
 
 	// set 2D virtual screen size
 	qglViewport( 0, 0, glConfig.vidWidth, glConfig.vidHeight );
 	qglScissor( 0, 0, glConfig.vidWidth, glConfig.vidHeight );
 	qglMatrixMode(GL_PROJECTION);
     qglLoadIdentity ();
-	qglOrtho (0, 640, 480, 0, 0, 1);
+	qglOrtho (orthoLeft, orthoRight, 480, 0, 0, 1);
 	qglMatrixMode(GL_MODELVIEW);
     qglLoadIdentity ();
 
@@ -1051,6 +1087,22 @@ const void *RB_StretchPic ( const void *data ) {
 		RB_BeginSurface( shader, 0 );
 	}
 
+	// Under r_aspectCorrect2D, flat fills that span the full virtual width
+	// (cinematic letterbox bars, fades, screen wipes) are meant to cover
+	// the entire display — widen them past the pillarbox. Textured art
+	// (menus, HUD) stays in the 4:3 box.
+	float picX = cmd->x, picW = cmd->w;
+	if ( r_aspectCorrect2D->integer &&
+		 picX <= 0 && picX + picW >= 640 &&
+		 !Q_stricmp( shader->name, "white" ) ) {
+		int w43 = glConfig.vidHeight * 4 / 3;
+		if ( w43 < glConfig.vidWidth ) {
+			float extra = 640.0f * ( (float)glConfig.vidWidth / w43 - 1.0f ) * 0.5f;
+			picX -= extra;
+			picW += 2.0f * extra;
+		}
+	}
+
 	RB_CHECKOVERFLOW( 4, 6 );
 	numVerts = tess.numVertexes;
 	numIndexes = tess.numIndexes;
@@ -1071,28 +1123,28 @@ const void *RB_StretchPic ( const void *data ) {
 	baDest = (byteAlias_t *)&tess.vertexColors[numVerts + 2]; baDest->ui = baSource->ui;
 	baDest = (byteAlias_t *)&tess.vertexColors[numVerts + 3]; baDest->ui = baSource->ui;
 
-	tess.xyz[ numVerts ][0] = cmd->x;
+	tess.xyz[ numVerts ][0] = picX;
 	tess.xyz[ numVerts ][1] = cmd->y;
 	tess.xyz[ numVerts ][2] = 0;
 
 	tess.texCoords[ numVerts ][0][0] = cmd->s1;
 	tess.texCoords[ numVerts ][0][1] = cmd->t1;
 
-	tess.xyz[ numVerts + 1 ][0] = cmd->x + cmd->w;
+	tess.xyz[ numVerts + 1 ][0] = picX + picW;
 	tess.xyz[ numVerts + 1 ][1] = cmd->y;
 	tess.xyz[ numVerts + 1 ][2] = 0;
 
 	tess.texCoords[ numVerts + 1 ][0][0] = cmd->s2;
 	tess.texCoords[ numVerts + 1 ][0][1] = cmd->t1;
 
-	tess.xyz[ numVerts + 2 ][0] = cmd->x + cmd->w;
+	tess.xyz[ numVerts + 2 ][0] = picX + picW;
 	tess.xyz[ numVerts + 2 ][1] = cmd->y + cmd->h;
 	tess.xyz[ numVerts + 2 ][2] = 0;
 
 	tess.texCoords[ numVerts + 2 ][0][0] = cmd->s2;
 	tess.texCoords[ numVerts + 2 ][0][1] = cmd->t2;
 
-	tess.xyz[ numVerts + 3 ][0] = cmd->x;
+	tess.xyz[ numVerts + 3 ][0] = picX;
 	tess.xyz[ numVerts + 3 ][1] = cmd->y + cmd->h;
 	tess.xyz[ numVerts + 3 ][2] = 0;
 
@@ -1618,6 +1670,16 @@ static void RB_Brightness( void ) {
 		RB_SetGL2D();
 	}
 
+	// the brightness pass must cover the whole framebuffer, including any
+	// r_aspectCorrect2D margins — use a plain full-screen projection
+	qglViewport( 0, 0, glConfig.vidWidth, glConfig.vidHeight );
+	qglScissor( 0, 0, glConfig.vidWidth, glConfig.vidHeight );
+	qglMatrixMode( GL_PROJECTION );
+	qglLoadIdentity();
+	qglOrtho( 0, 640, 480, 0, 0, 1 );
+	qglMatrixMode( GL_MODELVIEW );
+	qglLoadIdentity();
+
 	GL_Bind( tr.whiteImage );
 
 	if ( gain < 1.0f ) {
@@ -1722,6 +1784,8 @@ const void	*RB_SwapBuffers( const void *data ) {
 	ri.WIN_Present(&window);
 
 	backEnd.projection2D = qfalse;
+	s_sceneRenderedThisFrame = qfalse;
+	s_barsClearedThisFrame = qfalse;
 
 	return (const void *)(cmd + 1);
 }

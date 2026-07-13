@@ -2657,6 +2657,13 @@ void _UI_Init( qboolean inGameLoad )
 	// for 640x480 virtualized screen
 	uiInfo.uiDC.yscale = uiInfo.uiDC.glconfig.vidHeight * (1.0/480.0);
 	uiInfo.uiDC.xscale = uiInfo.uiDC.glconfig.vidWidth * (1.0/640.0);
+	uiInfo.uiDC.xbias = 0.0f;
+	if ( Cvar_VariableIntegerValue( "r_aspectCorrect2D" ) &&
+		 uiInfo.uiDC.glconfig.vidWidth * 3 > uiInfo.uiDC.glconfig.vidHeight * 4 ) {
+		// renderer draws the 2D layer pillarboxed: uniform scale, centered
+		uiInfo.uiDC.xscale = uiInfo.uiDC.yscale;
+		uiInfo.uiDC.xbias = ( uiInfo.uiDC.glconfig.vidWidth - 640.0f * uiInfo.uiDC.xscale ) * 0.5f;
+	}
 	if ( uiInfo.uiDC.glconfig.vidWidth * 480 > uiInfo.uiDC.glconfig.vidHeight * 640 )
 	{
 		// wide screen

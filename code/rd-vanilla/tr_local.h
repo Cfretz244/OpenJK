@@ -1149,6 +1149,7 @@ extern cvar_t	*r_fullscreen;
 extern cvar_t	*r_noborder;			// disable border in windowed mode
 extern cvar_t	*r_centerWindow;		// override vid_x/ypos and center the window
 extern cvar_t	*r_gamma;
+extern cvar_t	*r_aspectCorrect2D;		// draw the 640x480 2D layer pillarboxed on wide screens
 extern cvar_t	*r_displayRefresh;		// optional display refresh option
 extern cvar_t	*r_ignorehwgamma;		// overrides hardware gamma capabilities
 

@@ -22,6 +22,10 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 */
 
 #include "cg_local.h"
+
+#ifdef __APPLE__
+#include <TargetConditionals.h>
+#endif
 #include "cg_media.h"
 #include "FxScheduler.h"
 
@@ -346,7 +350,12 @@ static cvarTable_t cvarTable[] = {
 	{ &cg_autoswitch, "cg_autoswitch", "1", CVAR_ARCHIVE },
 	{ &cg_drawGun, "cg_drawGun", "1", CVAR_ARCHIVE },
 	{ &cg_fov, "cg_fov", "80", CVAR_ARCHIVE },
+#if defined(__ANDROID__) || (defined(__APPLE__) && defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE)
+	// mobile screens are wide; a 4:3 FOV looks zoomed-in without Hor+ correction
+	{ &cg_fovAspectAdjust, "cg_fovAspectAdjust", "1", CVAR_ARCHIVE },
+#else
 	{ &cg_fovAspectAdjust, "cg_fovAspectAdjust", "0", CVAR_ARCHIVE },
+#endif
 	{ &cg_stereoSeparation, "cg_stereoSeparation", "0.4", CVAR_ARCHIVE  },
 	{ &cg_shadows, "cg_shadows", "1", CVAR_ARCHIVE  },
 

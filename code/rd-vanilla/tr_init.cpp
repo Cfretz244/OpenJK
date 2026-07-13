@@ -126,6 +126,7 @@ cvar_t	*r_textureMode;
 cvar_t	*r_offsetFactor;
 cvar_t	*r_offsetUnits;
 cvar_t	*r_gamma;
+cvar_t	*r_aspectCorrect2D;
 cvar_t	*r_intensity;
 cvar_t	*r_lockpvs;
 cvar_t	*r_noportals;
@@ -1708,6 +1709,12 @@ void R_Register( void )
 	r_finish = ri.Cvar_Get ("r_finish", "0", CVAR_ARCHIVE_ND);
 	r_textureMode = ri.Cvar_Get( "r_textureMode", "GL_LINEAR_MIPMAP_LINEAR", CVAR_ARCHIVE );
 	r_gamma = ri.Cvar_Get( "r_gamma", "1", CVAR_ARCHIVE_ND );
+#ifdef USE_GLES1
+	// mobile screens are wide; the stretched 4:3 UI looks wrong by default
+	r_aspectCorrect2D = ri.Cvar_Get( "r_aspectCorrect2D", "1", CVAR_ARCHIVE_ND );
+#else
+	r_aspectCorrect2D = ri.Cvar_Get( "r_aspectCorrect2D", "0", CVAR_ARCHIVE_ND );
+#endif
 	r_facePlaneCull = ri.Cvar_Get ("r_facePlaneCull", "1", CVAR_ARCHIVE_ND );
 
 	r_dlightStyle = ri.Cvar_Get ("r_dlightStyle", "1", CVAR_ARCHIVE_ND);

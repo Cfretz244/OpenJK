@@ -230,6 +230,7 @@ typedef struct {
 
 	float		yscale;
 	float		xscale;
+	float		xbias;		// horizontal pixel offset when the 2D layer is pillarboxed (r_aspectCorrect2D)
 	float		bias;
 	int			realTime;
 	int			frameTime;
