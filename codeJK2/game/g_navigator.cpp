@@ -556,6 +556,12 @@ void CNavigator::Free( void )
 	{
 		delete (*ni);
 	}
+
+	// The navigator is a global that outlives the level when the game module
+	// is statically linked, so the containers must actually be emptied or the
+	// next level walks a vector of dangling node pointers.
+	m_nodes.clear();
+	m_edgeLookupMap.clear();
 }
 
 /*

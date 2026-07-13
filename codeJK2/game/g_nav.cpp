@@ -1831,6 +1831,17 @@ NAV_Shutdown
 void NAV_Shutdown( void )
 {
 	navigator.Free();
+
+	// These file statics survive level reload when the game module is
+	// statically linked (no dlclose to reset them): the waypoint count
+	// accumulates across loads until "Too many waypoints!", and the temp
+	// list can leak if the level is torn down before paths are calculated.
+	if ( tempWaypointList )
+	{
+		gi.Free( tempWaypointList );
+		tempWaypointList = 0;
+	}
+	numStoredWaypoints = 0;
 }
 
 /*
