@@ -736,10 +736,23 @@ ShutdownGame
 =================
 */
 void ShutdownGame( void ) {
+	extern qboolean	player_locked;
+	extern char		cinematicSkipScript[1024];
+
 	gi.Printf ("==== ShutdownGame ====\n");
 
 	gi.Printf ("... ICARUS_Shutdown\n");
 	ICARUS_Shutdown ();	//Shut ICARUS down
+
+	// Script-driven state that outlives the level when the game module is
+	// statically linked (no dlclose to reset it).  Scripts may lock the player
+	// and rely on the level change to unlock (artus_mine's ending tram ride
+	// does), which left the player rooted for all of artus_detention; a stale
+	// skip script could likewise run in the wrong level.  The JKA game module
+	// resets player_locked per level (CQuake3GameInterface's constructor) —
+	// this codebase predates that.
+	player_locked = qfalse;
+	memset( cinematicSkipScript, 0, sizeof( cinematicSkipScript ) );
 
 	gi.Printf ("... Reference Tags Cleared\n");
 	TAG_Init();	//Clear the reference tags
