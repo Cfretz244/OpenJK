@@ -617,6 +617,34 @@ void G_Roff( gentity_t *ent )
 
 
 //-------------------------------------------------------
+// G_FreeCachedRoffs
+//
+// The cache outlives the level when the game module is
+//	statically linked (no dlclose to reset it), but each
+//	entry's fileName and data live on the level hunk,
+//	which IS freed -- so entries left behind dangle and
+//	G_LoadRoff's cache-hit check compares against freed
+//	memory (and G_Roff then plays back garbage).  Empty
+//	the cache on level shutdown; the note track arrays
+//	are the only heap allocations to release.
+//-------------------------------------------------------
+
+void G_FreeCachedRoffs()
+{
+	for ( int i = 0; i < num_roffs; i++ )
+	{
+		if ( roffs[i].mNoteTrackIndexes )
+		{
+			delete [] roffs[i].mNoteTrackIndexes[0];
+			delete [] roffs[i].mNoteTrackIndexes;
+		}
+	}
+
+	memset( roffs, 0, sizeof( roffs ) );
+	num_roffs = 0;
+}
+
+//-------------------------------------------------------
 // G_SaveCachedRoffs
 //
 // Really fun savegame stuff

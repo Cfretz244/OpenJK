@@ -747,6 +747,9 @@ void ShutdownGame( void ) {
 	gi.Printf ("... Navigation Data Cleared\n");
 	NAV_Shutdown();
 
+	gi.Printf ("... ROFF Cache Cleared\n");
+	G_FreeCachedRoffs();
+
 	// write all the client session data so we can get it back
 	G_WriteSessionData();
 
