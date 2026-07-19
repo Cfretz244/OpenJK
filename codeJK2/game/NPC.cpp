@@ -2151,6 +2151,15 @@ void NPC_InitAI ( void )
 	d_slowmodeath = gi.cvar ( "d_slowmodeath", "3", CVAR_ARCHIVE );//save this setting
 
 	d_saberCombat = gi.cvar ( "d_saberCombat", "0", CVAR_CHEAT );
+
+	// Static-link stale-global: these team-speech debounce arrays hold
+	// (level.time + N) future timestamps.  Under dlclose they zeroed between
+	// levels; statically linked they persist, so a stale future value mutes team
+	// speech early in the next/reloaded level until its clock catches up.
+	extern int jediSpeechDebounceTime[];
+	extern int groupSpeechDebounceTime[];
+	memset( jediSpeechDebounceTime, 0, sizeof( int ) * TEAM_NUM_TEAMS );
+	memset( groupSpeechDebounceTime, 0, sizeof( int ) * TEAM_NUM_TEAMS );
 }
 
 /*

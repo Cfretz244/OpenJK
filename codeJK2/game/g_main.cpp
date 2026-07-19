@@ -26,6 +26,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "g_local.h"
 #include "g_functions.h"
 #include "Q3_Interface.h"
+#include "Q3_Registers.h"
 #include "g_nav.h"
 #include "g_roff.h"
 #include "g_navigator.h"
@@ -613,6 +614,37 @@ qboolean g_qbLoadTransition = qfalse;
 #ifndef FINAL_BUILD
 extern int fatalErrors;
 #endif
+
+/*
+============
+G_CheckResidualState
+
+Static-link stale-global tripwire.  Under static linking the game module is never
+dlclose'd, so a file-scope global that some subsystem forgot to reset in teardown
+survives into the next level and misbehaves (the whole hazard class: nav, ROFF,
+player_locked, script vars, ...).  Called at the top of InitGame — after the
+previous level's ShutdownGame has already run — every audited global should read
+"clean" here.  Anything that doesn't is a leak: it announces itself in qconsole.log
+instead of shipping silently and being found by playing.  Gated on g_staleGlobalCheck
+(default on) so it can be silenced.  To extend: add the global's teardown reset, then
+add a check for it here.
+============
+*/
+void G_CheckResidualState( void )
+{
+	cvar_t *check = gi.cvar( "g_staleGlobalCheck", "1", CVAR_ARCHIVE );
+	if ( !check || !check->integer )
+		return;
+
+	extern int numVariables;		// Q3_Registers.cpp — ICARUS declare/set/get store
+	extern int numNewICARUSEnts;	// g_target.cpp — monotonic script-ent name allocator
+
+	if ( numVariables != 0 )
+		gi.Printf( S_COLOR_YELLOW "STALE GLOBAL: %d ICARUS script variable(s) survived into level init (expected 0)\n", numVariables );
+	if ( numNewICARUSEnts != 0 )
+		gi.Printf( S_COLOR_YELLOW "STALE GLOBAL: numNewICARUSEnts=%d at level init (expected 0)\n", numNewICARUSEnts );
+}
+
 void InitGame(  const char *mapname, const char *spawntarget, int checkSum, const char *entities, int levelTime, int randomSeed, int globalTime, SavedGameJustLoaded_e eSavedGameJustLoaded, qboolean qbLoadTransition )
 {
 	giMapChecksum = checkSum;
@@ -626,6 +658,10 @@ void InitGame(  const char *mapname, const char *spawntarget, int checkSum, cons
 	srand( randomSeed );
 
 	G_InitCvars();
+
+	// Stale-global tripwire: audited file-scope state should be clean here (the
+	// previous level's ShutdownGame already ran).  Warns to the log if not.
+	G_CheckResidualState();
 
 	G_InitMemory();
 
@@ -753,6 +789,18 @@ void ShutdownGame( void ) {
 	// this codebase predates that.
 	player_locked = qfalse;
 	memset( cinematicSkipScript, 0, sizeof( cinematicSkipScript ) );
+
+	// Same hazard class: file-scope state the dynamic build reset via dlclose.
+	// (1) ICARUS script variables (declare/set/get store) — the story-flag store;
+	//     every save-driven level entry repopulates it via ReadLevel->Q3_VariableLoad,
+	//     so clearing here only affects the no-save map/New Game path (a clean slate,
+	//     the dlclose behaviour).  (2) numNewICARUSEnts — monotonic script-ent name
+	//     allocator that otherwise climbs forever across levels.  (3) missionInfo_Updated
+	//     — stale "new objective" HUD flash carried into the next level.
+	extern int numNewICARUSEnts;
+	Q3_InitVariables();
+	numNewICARUSEnts = 0;
+	missionInfo_Updated = qfalse;
 
 	gi.Printf ("... Reference Tags Cleared\n");
 	TAG_Init();	//Clear the reference tags

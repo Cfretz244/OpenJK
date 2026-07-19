@@ -1859,6 +1859,13 @@ void R_Init( void ) {
 	memset( &backEnd, 0, sizeof( backEnd ) );
 	memset( &tess, 0, sizeof( tess ) );
 
+	// Static-link stale-global: the surface-sprite FOV latch caches first-frame-ever
+	// values and never resets — under dlclose the reload zeroed it, statically linked
+	// it keeps stale scaling across a vid_restart.  R_Init runs on every full renderer
+	// (re)init, so clear it here.
+	extern qboolean standardfovinitialized;
+	standardfovinitialized = qfalse;
+
 #ifndef FINAL_BUILD
 	if ( (intptr_t)tess.xyz & 15 ) {
 		Com_Printf( "WARNING: tess.xyz not 16 byte aligned\n" );

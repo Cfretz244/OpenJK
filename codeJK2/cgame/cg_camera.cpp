@@ -64,7 +64,18 @@ void CGCam_Init( void )
 	extern qboolean qbVidRestartOccured;
 	if (!qbVidRestartOccured)
 	{
+		// Static-link stale-global tripwire: in_camera should already be false on a
+		// genuine level change; if it isn't, a cinematic outlived its level.
+		if ( in_camera )
+			CG_Printf( S_COLOR_YELLOW "STALE GLOBAL: in_camera was true at level init (cinematic outlived its level)\n" );
 		memset( &client_camera, 0, sizeof ( camera_t ) );
+		// Static-link stale-global fix: in_camera is otherwise cleared only by
+		// CG_Shutdown / CGCam_Disable, neither of which runs on a die+reload when
+		// the cgame is statically linked (no dlclose, VM kept alive).  A cinematic
+		// left "active" then poisons the next level's camera/script state.  Reset it
+		// here on a genuine level change, but NOT on a vid_restart (that's why this
+		// sits inside the !qbVidRestartOccured guard, matching client_camera).
+		in_camera = false;
 	}
 }
 

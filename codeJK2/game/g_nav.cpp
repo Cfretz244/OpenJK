@@ -347,8 +347,12 @@ int NAV_FindClosestWaypointForEnt( gentity_t *ent, int targWp )
 int NAV_FindClosestWaypointForPoint( gentity_t *ent, vec3_t point )
 {
 	int	bestWP;
-	//FIXME: can we make this a static ent?
-	static gentity_t *marker = G_Spawn();
+	// NB: must NOT be static.  The marker is G_FreeEntity'd at the end of every
+	// call, so a process-static pointer dangles into a freed g_entities slot after
+	// the first call — and under static linking (no dlclose) it survives the
+	// memset(g_entities) at level init, so a later G_Spawn hands that slot to a
+	// real entity which this function then stomps and frees.  Spawn a fresh one.
+	gentity_t *marker = G_Spawn();
 
 	if ( !marker )
 	{

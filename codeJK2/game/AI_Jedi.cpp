@@ -87,7 +87,7 @@ qboolean Jedi_WaitingAmbush( gentity_t *self );
 
 extern int parryDebounce[];
 
-static int	jediSpeechDebounceTime[TEAM_NUM_TEAMS];//used to stop several jedi from speaking all at once
+int	jediSpeechDebounceTime[TEAM_NUM_TEAMS];//used to stop several jedi from speaking all at once (reset per level in NPC_InitAI — static-link stale-global)
 //Local state enums
 enum
 {
