@@ -421,14 +421,23 @@ if(BuildSPEngine OR BuildJK2SPEngine)
 					endif()
 				endif()
 
+				# Bundle identifier is overridable so different signers
+				# (personal team, ad-hoc build hosts) can register their own.
+				set(JK2SPBundleIdentifier "org.openjk.openjo-sp" CACHE STRING "CFBundleIdentifier for the iOS app")
+
 				add_executable(${ProjectName} MACOSX_BUNDLE ${SPEngineFiles})
 				set_target_properties(${ProjectName} PROPERTIES
 					MACOSX_BUNDLE_INFO_PLIST "${SharedDir}/ios/Info.plist"
-					MACOSX_BUNDLE_GUI_IDENTIFIER "org.openjk.openjo-sp"
+					MACOSX_BUNDLE_GUI_IDENTIFIER "${JK2SPBundleIdentifier}"
 					MACOSX_BUNDLE_BUNDLE_NAME "Jedi Outcast"
+					XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "${JK2SPBundleIdentifier}"
 					# keep @2x/@3x icon PNGs as-is; the combined-tiff
 					# treatment is a macOS-ism the iOS home screen can't read
-					XCODE_ATTRIBUTE_COMBINE_HIDPI_IMAGES "NO")
+					XCODE_ATTRIBUTE_COMBINE_HIDPI_IMAGES "NO"
+					# `xcodebuild archive` only places the app in the
+					# .xcarchive when the target is marked installable
+					XCODE_ATTRIBUTE_SKIP_INSTALL "NO"
+					XCODE_ATTRIBUTE_INSTALL_PATH "$(LOCAL_APPS_DIR)")
 			elseif(MakeApplicationBundles)
 				set_source_files_properties(${SPDirName}/macosx/OpenJK.icns PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
 				set(SPEngineFiles ${SPEngineFiles} ${SPDirName}/macosx/OpenJK.icns)
