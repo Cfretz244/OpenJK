@@ -43,6 +43,24 @@ static cvar_t *in_joystickUseAnalog = NULL;
 static cvar_t *in_gamepadLookSpeed  = NULL;
 static cvar_t *in_gamepadConsoleChord = NULL;
 
+#if defined(__ANDROID__) || defined(__IPHONEOS__)
+// Mobile touch-as-mouse in menus: SDL synthesises a mouse-button-down the
+// instant a finger lands, so dragging the cursor off a button activates it.
+// While the UI has the keyboard, we swallow the synthesised button events
+// and emit a MOUSE1 click only on finger-up for a genuine tap (short, barely
+// moved). In-game (no menu) the synthesised events pass through unchanged
+// so a held finger still fires. Settings: in_touchTapMs (max tap duration),
+// in_touchTapDist (max travel as a fraction of the shorter screen edge).
+static cvar_t *in_touchTapMs        = NULL;
+static cvar_t *in_touchTapDist      = NULL;
+static qboolean touchTapMode        = qfalse; // the finger-down was swallowed
+static SDL_FingerID touchTapFinger  = 0;
+static Uint32 touchTapStart         = 0;
+static float touchTapX = 0, touchTapY = 0;
+static float touchTapMaxMove        = 0; // normalised, vs shorter edge
+static qboolean touchTapValid       = qfalse;
+#endif
+
 // Hold both stick-clicks this long to toggle the console.
 #define GAMEPAD_CONSOLE_CHORD_MS 400
 
@@ -610,6 +628,10 @@ static void IN_InitJoystick( void )
 	in_joystickThreshold = Cvar_Get( "joy_threshold", "0.15", CVAR_ARCHIVE_ND );
 	in_gamepadLookSpeed = Cvar_Get( "in_gamepadLookSpeed", "30", CVAR_ARCHIVE_ND );
 	in_gamepadConsoleChord = Cvar_Get( "in_gamepadConsoleChord", "1", CVAR_ARCHIVE_ND );
+#if defined(__ANDROID__) || defined(__IPHONEOS__)
+	in_touchTapMs = Cvar_Get( "in_touchTapMs", "300", CVAR_ARCHIVE_ND );
+	in_touchTapDist = Cvar_Get( "in_touchTapDist", "0.04", CVAR_ARCHIVE_ND );
+#endif
 
 	// Prefer the game controller interface: standardized stick/button
 	// layout for any pad SDL recognizes (MFi, DualSense, Xbox, ...).
@@ -948,6 +970,24 @@ static void IN_ProcessEvents( void )
 			case SDL_MOUSEBUTTONUP:
 				{
 					unsigned short b;
+#if defined(__ANDROID__) || defined(__IPHONEOS__)
+					if ( e.button.which == SDL_TOUCH_MOUSEID && e.button.button == SDL_BUTTON_LEFT )
+					{
+						if ( e.type == SDL_MOUSEBUTTONDOWN )
+						{
+							// Menus: defer the click to finger-up (tap detection below).
+							touchTapMode = (qboolean)( ( Key_GetCatcher( ) & KEYCATCH_UI ) || cls.state != CA_ACTIVE );
+							if ( touchTapMode )
+								break;
+						}
+						else if ( touchTapMode )
+						{
+							// Pairs with the swallowed down (SDL posts this before
+							// the FINGERUP, which consumes touchTapMode).
+							break;
+						}
+					}
+#endif
 					switch( e.button.button )
 					{
 						case SDL_BUTTON_LEFT:	b = A_MOUSE1;     break;
@@ -961,6 +1001,53 @@ static void IN_ProcessEvents( void )
 						( e.type == SDL_MOUSEBUTTONDOWN ? qtrue : qfalse ), 0, NULL );
 				}
 				break;
+
+#if defined(__ANDROID__) || defined(__IPHONEOS__)
+			case SDL_FINGERDOWN:
+				if ( !touchTapValid )
+				{
+					touchTapValid = qtrue;
+					touchTapFinger = e.tfinger.fingerId;
+					touchTapStart = e.tfinger.timestamp;
+					touchTapX = e.tfinger.x;
+					touchTapY = e.tfinger.y;
+					touchTapMaxMove = 0;
+				}
+				else
+					touchTapMaxMove = 999; // second finger: not a tap
+				break;
+
+			case SDL_FINGERMOTION:
+				if ( touchTapValid && e.tfinger.fingerId == touchTapFinger )
+				{
+					float w = (float)cls.glconfig.vidWidth, h = (float)cls.glconfig.vidHeight;
+					float m = ( w < h ) ? w : h;
+					if ( m <= 0 ) m = 1;
+					float dx = ( e.tfinger.x - touchTapX ) * w / m;
+					float dy = ( e.tfinger.y - touchTapY ) * h / m;
+					float d = sqrtf( dx * dx + dy * dy );
+					if ( d > touchTapMaxMove )
+						touchTapMaxMove = d;
+				}
+				break;
+
+			case SDL_FINGERUP:
+				if ( touchTapValid && e.tfinger.fingerId == touchTapFinger )
+				{
+					touchTapValid = qfalse;
+					// Only a swallowed (menu) press can become a tap-click; the
+					// in-game path already delivered a real down/up pair.
+					if ( touchTapMode
+						&& (int)( e.tfinger.timestamp - touchTapStart ) <= in_touchTapMs->integer
+						&& touchTapMaxMove <= in_touchTapDist->value )
+					{
+						Sys_QueEvent( 0, SE_KEY, A_MOUSE1, qtrue, 0, NULL );
+						Sys_QueEvent( 0, SE_KEY, A_MOUSE1, qfalse, 0, NULL );
+					}
+					touchTapMode = qfalse;
+				}
+				break;
+#endif
 
 			case SDL_MOUSEWHEEL:
 				if( e.wheel.y > 0 )
