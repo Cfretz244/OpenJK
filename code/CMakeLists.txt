@@ -421,6 +421,26 @@ if(BuildSPEngine OR BuildJK2SPEngine)
 					endif()
 				endif()
 
+				# Game assets (pk3s) are non-redistributable, so they are
+				# supplied externally too. When a directory is given, every
+				# *.pk3 in it is embedded at <App>.app/base/, which the engine
+				# already searches: on iOS Sys_StripAppBundle() is a no-op
+				# (the executable sits directly in the .app, there is no
+				# Contents/MacOS), so fs_basepath is the .app directory.
+				# fs_homepath (Documents) stays writable for config/saves and
+				# any pk3s the user drops there via Files still load.
+				set(JK2SPAssetDir "" CACHE PATH "Directory containing assets*.pk3 to embed in the iOS bundle under base/")
+				if(JK2SPAssetDir)
+					file(GLOB JK2SPAssetFiles "${JK2SPAssetDir}/*.pk3")
+					if(JK2SPAssetFiles)
+						set_source_files_properties(${JK2SPAssetFiles} PROPERTIES MACOSX_PACKAGE_LOCATION base)
+						set(SPEngineFiles ${SPEngineFiles} ${JK2SPAssetFiles})
+						message(STATUS "iOS bundle will embed pk3s from ${JK2SPAssetDir}")
+					else()
+						message(WARNING "JK2SPAssetDir=${JK2SPAssetDir} contains no *.pk3; app will need assets in Documents")
+					endif()
+				endif()
+
 				# Bundle identifier is overridable so different signers
 				# (personal team, ad-hoc build hosts) can register their own.
 				set(JK2SPBundleIdentifier "org.openjk.openjo-sp" CACHE STRING "CFBundleIdentifier for the iOS app")
