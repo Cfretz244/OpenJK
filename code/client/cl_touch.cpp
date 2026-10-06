@@ -56,8 +56,10 @@ static const touchButton_t touchButtons[] = {
 	{ "JMP",  -168, 442, 28, A_SPACE,  TB_HOLD },
 	{ "DUCK", -242, 448, 24, A_LOW_C,  TB_HOLD },
 	{ "PUSH", -172, 362, 26, A_F1,     TB_TAP  },
+	{ "LTNG", -232, 305, 26, A_F7,     TB_HOLD },	// +force_lightning
 	{ "PULL", -116, 300, 26, A_F2,     TB_TAP  },
-	{ "USE",  -40,  300, 24, A_LOW_E,  TB_HOLD },
+	{ "THRW", -40,  305, 24, A_ALT,    TB_HOLD },	// +altattack: saber throw
+	{ "USE",  -34,  248, 22, A_LOW_E,  TB_HOLD },
 	{ "STYL", -242, 380, 22, A_LOW_L,  TB_TAP  },
 	{ "WPN",  -84,  28,  20, A_LOW_R,  TB_TAP  },
 	{ "MENU", -32,  28,  20, A_ESCAPE, TB_MENU },
