@@ -59,6 +59,11 @@ static Uint32 touchTapStart         = 0;
 static float touchTapX = 0, touchTapY = 0;
 static float touchTapMaxMove        = 0; // normalised, vs shorter edge
 static qboolean touchTapValid       = qfalse;
+static qboolean touchTapLongFired   = qfalse;
+// Outside gameplay (menus, or the console itself) a still long-press
+// toggles the console: the only way to reach it from the main menu, and the
+// only way out if the on-screen keyboard was dismissed with the system key.
+static cvar_t *in_touchConsoleHoldMs = NULL;
 #endif
 
 // Hold both stick-clicks this long to toggle the console.
@@ -631,6 +636,7 @@ static void IN_InitJoystick( void )
 #if defined(__ANDROID__) || defined(__IPHONEOS__)
 	in_touchTapMs = Cvar_Get( "in_touchTapMs", "300", CVAR_ARCHIVE_ND );
 	in_touchTapDist = Cvar_Get( "in_touchTapDist", "0.04", CVAR_ARCHIVE_ND );
+	in_touchConsoleHoldMs = Cvar_Get( "in_touchConsoleHoldMs", "1000", CVAR_ARCHIVE_ND );
 #endif
 
 	// Prefer the game controller interface: standardized stick/button
@@ -1022,6 +1028,7 @@ static void IN_ProcessEvents( void )
 					touchTapX = e.tfinger.x;
 					touchTapY = e.tfinger.y;
 					touchTapMaxMove = 0;
+					touchTapLongFired = qfalse;
 				}
 				else
 					touchTapMaxMove = 999; // second finger: not a tap
@@ -1522,6 +1529,18 @@ void IN_Frame (void) {
 
 #if defined(__ANDROID__) || defined(__IPHONEOS__)
 	CL_TouchFrame( );
+
+	// Still long-press outside gameplay -> toggle console (see touchTapLongFired).
+	if ( touchTapValid && !touchTapLongFired && !CL_TouchOverlayActive( )
+		&& in_touchConsoleHoldMs->integer > 0
+		&& touchTapMaxMove <= in_touchTapDist->value
+		&& (int)( SDL_GetTicks( ) - touchTapStart ) >= in_touchConsoleHoldMs->integer )
+	{
+		touchTapLongFired = qtrue;
+		touchTapMaxMove = 999;	// the release must not also count as a tap-click
+		Sys_QueEvent( 0, SE_KEY, A_CONSOLE, qtrue, 0, NULL );
+		Sys_QueEvent( 0, SE_KEY, A_CONSOLE, qfalse, 0, NULL );
+	}
 
 	// Mobile: tie the on-screen keyboard to the console (desktop starts
 	// text input once at IN_Init instead). Track our own edge state, not

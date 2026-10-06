@@ -90,7 +90,7 @@ static void Touch_InitCvars( void ) {
 	if ( in_touchControls )
 		return;
 	in_touchControls   = Cvar_Get( "in_touchControls",   TOUCH_DEFAULT, CVAR_ARCHIVE_ND );
-	in_touchLookScale  = Cvar_Get( "in_touchLookScale",  "1.0", CVAR_ARCHIVE_ND );
+	in_touchLookScale  = Cvar_Get( "in_touchLookScale",  "3.0", CVAR_ARCHIVE_ND );
 	in_touchSwingTapMs = Cvar_Get( "in_touchSwingTapMs", "200", CVAR_ARCHIVE_ND );
 	in_touchAlpha      = Cvar_Get( "in_touchAlpha",      "0.45", CVAR_ARCHIVE_ND );
 }
