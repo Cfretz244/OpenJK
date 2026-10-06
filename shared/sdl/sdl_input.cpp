@@ -958,6 +958,13 @@ static void IN_ProcessEvents( void )
 				break;
 
 			case SDL_MOUSEMOTION:
+#if defined(__ANDROID__) || defined(__IPHONEOS__)
+				// In-game the touch overlay owns the fingers (drag-look is
+				// derived from finger motion there, so the first finger isn't
+				// special); drop SDL's touch-as-mouse synthesis.
+				if ( e.motion.which == SDL_TOUCH_MOUSEID && CL_TouchOverlayActive() )
+					break;
+#endif
 				if ( mouseActive )
 				{
 					if ( !e.motion.xrel && !e.motion.yrel )
@@ -973,6 +980,8 @@ static void IN_ProcessEvents( void )
 #if defined(__ANDROID__) || defined(__IPHONEOS__)
 					if ( e.button.which == SDL_TOUCH_MOUSEID && e.button.button == SDL_BUTTON_LEFT )
 					{
+						if ( CL_TouchOverlayActive() )
+							break;	// overlay handles it (see SDL_FINGER* below)
 						if ( e.type == SDL_MOUSEBUTTONDOWN )
 						{
 							// Menus: defer the click to finger-up (tap detection below).
@@ -1004,6 +1013,7 @@ static void IN_ProcessEvents( void )
 
 #if defined(__ANDROID__) || defined(__IPHONEOS__)
 			case SDL_FINGERDOWN:
+				CL_TouchEvent( (long long)e.tfinger.fingerId, 0, e.tfinger.x, e.tfinger.y );
 				if ( !touchTapValid )
 				{
 					touchTapValid = qtrue;
@@ -1018,6 +1028,7 @@ static void IN_ProcessEvents( void )
 				break;
 
 			case SDL_FINGERMOTION:
+				CL_TouchEvent( (long long)e.tfinger.fingerId, 1, e.tfinger.x, e.tfinger.y );
 				if ( touchTapValid && e.tfinger.fingerId == touchTapFinger )
 				{
 					float w = (float)cls.glconfig.vidWidth, h = (float)cls.glconfig.vidHeight;
@@ -1032,6 +1043,7 @@ static void IN_ProcessEvents( void )
 				break;
 
 			case SDL_FINGERUP:
+				CL_TouchEvent( (long long)e.tfinger.fingerId, 2, e.tfinger.x, e.tfinger.y );
 				if ( touchTapValid && e.tfinger.fingerId == touchTapFinger )
 				{
 					touchTapValid = qfalse;
@@ -1509,6 +1521,8 @@ void IN_Frame (void) {
 	IN_ProcessEvents( );
 
 #if defined(__ANDROID__) || defined(__IPHONEOS__)
+	CL_TouchFrame( );
+
 	// Mobile: tie the on-screen keyboard to the console (desktop starts
 	// text input once at IN_Init instead). Track our own edge state, not
 	// SDL_IsTextInputActive(): the UIKit backend toggles that on keyboard

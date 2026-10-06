@@ -406,6 +406,12 @@ void CL_PlayCinematic_f( void );
 void CL_PlayInGameCinematic_f(void);
 qboolean CL_CheckPendingCinematic(void);
 qboolean CL_IsRunningInGameCinematic(void);
+
+// cl_touch.cpp — on-screen touch controls (mobile)
+void		CL_TouchEvent( long long fingerId, int type, float nx, float ny );	// type: 0 down, 1 motion, 2 up
+void		CL_TouchFrame( void );
+void		CL_TouchDraw( void );
+qboolean	CL_TouchOverlayActive( void );
 qboolean CL_InGameCinematicOnStandBy(void);
 void SCR_DrawCinematic (void);
 void SCR_RunCinematic (void);

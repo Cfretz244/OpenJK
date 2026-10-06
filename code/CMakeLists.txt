@@ -136,6 +136,7 @@ if(BuildSPEngine OR BuildJK2SPEngine)
 		"${SPDir}/client/cl_mp3.cpp"
 		"${SPDir}/client/cl_parse.cpp"
 		"${SPDir}/client/cl_scrn.cpp"
+		"${SPDir}/client/cl_touch.cpp"
 		"${SPDir}/client/cl_ui.cpp"
 		"${SPDir}/client/cl_mp3.h"
 		"${SPDir}/client/client.h"
@@ -430,6 +431,12 @@ if(BuildSPEngine OR BuildJK2SPEngine)
 				# fs_homepath (Documents) stays writable for config/saves and
 				# any pk3s the user drops there via Files still load.
 				set(JK2SPAssetDir "" CACHE PATH "Directory containing assets*.pk3 to embed in the iOS bundle under base/")
+				# Fork-owned extras (touch overlay art) always ride along.
+				file(GLOB JK2SPExtraAssetFiles "${SharedDir}/ios/base/*.pk3")
+				if(JK2SPExtraAssetFiles)
+					set_source_files_properties(${JK2SPExtraAssetFiles} PROPERTIES MACOSX_PACKAGE_LOCATION base)
+					set(SPEngineFiles ${SPEngineFiles} ${JK2SPExtraAssetFiles})
+				endif()
 				if(JK2SPAssetDir)
 					file(GLOB JK2SPAssetFiles "${JK2SPAssetDir}/*.pk3")
 					if(JK2SPAssetFiles)

@@ -459,6 +459,9 @@ void SCR_DrawScreenField( stereoFrame_t stereoFrame ) {
 
 	// draw downloading progress bar
 
+	// on-screen touch controls (in-game only; hidden under menus)
+	CL_TouchDraw();
+
 	// the menu draws next
 	_UI_Refresh( cls.realtime );
 
