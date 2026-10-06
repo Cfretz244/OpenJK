@@ -17,7 +17,12 @@ width, see RB_SetGL2D). Buttons anchor to the right or left screen edge.
 #include "sys/sys_local.h"
 #include <math.h>
 
-#if defined(__ANDROID__) || defined(__IPHONEOS__)
+// __IPHONEOS__ is SDL's define and this file doesn't include SDL.h, so
+// detect iOS via Apple's TargetConditionals instead.
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#endif
+#if defined(__ANDROID__) || ( defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE )
 #define TOUCH_DEFAULT "1"
 #else
 #define TOUCH_DEFAULT "0"
